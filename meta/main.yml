@@ -1,0 +1,17 @@
+galaxy_info:
+  role_name: griffin
+  author: Jan Mach
+  description: Ansible role for convenient installation of the Griffin monitoring stack.
+  license: MIT
+  min_ansible_version: 2.5
+  github_branch: master
+  platforms:
+    - name: Debian
+      versions:
+        - buster
+  galaxy_tags:
+    - website
+    - monitoring
+
+dependencies:
+  - honzamach.postgresql

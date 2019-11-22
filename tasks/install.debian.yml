@@ -1,0 +1,55 @@
+---
+
+- name: Installing APT repository GPG key for TimescaleDB database
+  apt_key:
+    url: "{{ hm_griffin__apt_key_url_timescale }}"
+    state: present
+
+- name: Installing APT repository GPG key for Grafana
+  apt_key:
+    url: "{{ hm_griffin__apt_key_url_grafana }}"
+    state: present
+
+- name: Installing APT repository list file for TimescaleDB database
+  apt_repository:
+    repo: "{{ hm_griffin__apt_repository_timescale }}"
+    state: present
+    filename: timescaledb
+    update_cache: yes
+  notify:
+    - Restart PostgreSQL service
+
+- name: Installing APT repository list file for Grafana
+  apt_repository:
+    repo: "{{ hm_griffin__apt_repository_grafana }}"
+    state: present
+    filename: grafana
+    update_cache: yes
+
+- name: Uninstalling unnecessary packages
+  apt:
+    name: "{{ hm_griffin__uninstall_list }}"
+    state: absent
+
+- name: Installing necessary packages
+  apt:
+    name: "{{ hm_griffin__install_list }}"
+    state: latest
+    update_cache: "{{ hm_griffin__apt_force_update }}"
+
+- name: Autotune PostgreSQL to enable TimescaleDB
+  command: "timescaledb-tune -yes && touch /etc/postgresql/{{ hm_pgsql__major_version }}/main/timescaledb.tuned"
+  args:
+    creates: "/etc/postgresql/{{ hm_pgsql__major_version }}/main/timescaledb.tuned"
+  notify:
+    - Restart PostgreSQL service
+
+- name: Downloading Telegraf for local server monitoring
+  get_url:
+    url: "{{ hm_griffin__deb_url_telegraf }}"
+    dest: "/root/{{ hm_griffin__deb_url_telegraf | basename }}"
+    mode: "0755"
+
+- name: Installing Telegraf
+  apt:
+    deb: "/root/{{ hm_griffin__deb_url_telegraf | basename }}"

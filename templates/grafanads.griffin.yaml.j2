@@ -1,0 +1,30 @@
+#----------------------- <+++ansible-managed-file+++> -------------------------+
+#
+#                             IMPORTANT WARNING
+#
+#  This file is managed remotely by Ansible orchestration tool. Any local
+#  changes will be overwritten without any notice !!! You have been warned !!!
+#
+#----------------------- <+++ansible-managed-file+++> -------------------------+
+# config file version
+apiVersion: 1
+
+datasources:
+  - name: Griffin
+    type: postgres
+    url: localhost:5432
+    user: {{ hm_griffin__dbuser }}
+    database: {{ hm_griffin__dbname }}
+    isDefault: true
+    jsonData:
+      sslmode: "disable"
+      maxOpenConns: 0
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1000
+      timescaledb: true
+    secureJsonData:
+      password: "{{ hm_griffin__dbpswd }}"
+    version: 1
+    editable: false
+

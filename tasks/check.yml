@@ -1,0 +1,7 @@
+---
+
+- name: Check for correct version of PostgreSQL
+  assert:
+    that:
+        - 'hm_pgsql__major_version == "11"'
+    msg: "PostgreSQL must be installed in version 11, other versions are currently not supported"

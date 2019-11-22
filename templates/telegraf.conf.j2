@@ -1,0 +1,1858 @@
+#----------------------- <+++ansible-managed-file+++> -------------------------+
+#
+#                             IMPORTANT WARNING
+#
+#  This file is managed remotely by Ansible orchestration tool. Any local
+#  changes will be overwritten without any notice !!! You have been warned !!!
+#
+#----------------------- <+++ansible-managed-file+++> -------------------------+
+# Telegraf Configuration
+#
+# Telegraf is entirely plugin driven. All metrics are gathered from the
+# declared inputs, and sent to the declared outputs.
+#
+# Plugins must be declared in here to be active.
+# To deactivate a plugin, comment out the name and any variables.
+#
+# Use 'telegraf -config telegraf.conf -test' to see what metrics a config
+# file would generate.
+#
+# Environment variables can be used anywhere in this config file, simply surround
+# them with ${}. For strings the variable must be within quotes (ie, "${STR_VAR}"),
+# for numbers and booleans they should be plain (ie, ${INT_VAR}, ${BOOL_VAR})
+
+
+# Global tags can be specified here in key="value" format.
+[global_tags]
+  # dc = "us-east-1" # will tag all metrics with dc=us-east-1
+  # rack = "1a"
+  ## Environment variables can be used as tags, and throughout the config file
+  # user = "$USER"
+
+
+# Configuration for telegraf agent
+[agent]
+  ## Default data collection interval for all inputs
+  interval = "10s"
+  ## Rounds collection interval to 'interval'
+  ## ie, if interval="10s" then always collect on :00, :10, :20, etc.
+  round_interval = true
+
+  ## Telegraf will send metrics to outputs in batches of at most
+  ## metric_batch_size metrics.
+  ## This controls the size of writes that Telegraf sends to output plugins.
+  metric_batch_size = 1000
+
+  ## Maximum number of unwritten metrics per output.
+  metric_buffer_limit = 10000
+
+  ## Collection jitter is used to jitter the collection by a random amount.
+  ## Each plugin will sleep for a random time within jitter before collecting.
+  ## This can be used to avoid many plugins querying things like sysfs at the
+  ## same time, which can have a measurable effect on the system.
+  collection_jitter = "0s"
+
+  ## Default flushing interval for all outputs. Maximum flush_interval will be
+  ## flush_interval + flush_jitter
+  flush_interval = "10s"
+  ## Jitter the flush interval by a random amount. This is primarily to avoid
+  ## large write spikes for users running a large number of telegraf instances.
+  ## ie, a jitter of 5s and interval 10s means flushes will happen every 10-15s
+  flush_jitter = "0s"
+
+  ## By default or when set to "0s", precision will be set to the same
+  ## timestamp order as the collection interval, with the maximum being 1s.
+  ##   ie, when interval = "10s", precision will be "1s"
+  ##       when interval = "250ms", precision will be "1ms"
+  ## Precision will NOT be used for service inputs. It is up to each individual
+  ## service input to set the timestamp at the appropriate precision.
+  ## Valid time units are "ns", "us" (or "µs"), "ms", "s".
+  precision = ""
+
+  ## Log at debug level.
+  # debug = false
+  ## Log only error level messages.
+  # quiet = false
+
+  ## Log file name, the empty string means to log to stderr.
+  logfile = "/var/log/telegraf/telegraf.log"
+
+  ## The logfile will be rotated after the time interval specified.  When set
+  ## to 0 no time based rotation is performed.
+  # logfile_rotation_interval = "0d"
+
+  ## The logfile will be rotated when it becomes larger than the specified
+  ## size.  When set to 0 no size based rotation is performed.
+  # logfile_rotation_max_size = "0MB"
+
+  ## Maximum number of rotated archives to keep, any older logs are deleted.
+  ## If set to -1, no archives are removed.
+  # logfile_rotation_max_archives = 5
+
+  ## Override default hostname, if empty use os.Hostname()
+  hostname = ""
+  ## If set to true, do no set the "host" tag in the telegraf agent.
+  omit_hostname = false
+
+
+###############################################################################
+#                            OUTPUT PLUGINS                                   #
+###############################################################################
+
+
+# Send metrics to PostgreSQL
+[[outputs.postgresql]]
+  ## specify address via a url matching:
+  ##   postgres://[pqgotest[:password]]@localhost[/dbname]\
+  ##       ?sslmode=[disable|verify-ca|verify-full]
+  ## or a simple string:
+  ##   host=localhost user=pqotest password=... sslmode=... dbname=app_production
+  ##
+  ## All connection parameters are optional. Also supported are PG environment vars
+  ## e.g. PGPASSWORD, PGHOST, PGUSER, PGDATABASE
+  ## all supported vars here: https://www.postgresql.org/docs/current/libpq-envars.html
+  ##
+  ## Without the dbname parameter, the driver will default to a database
+  ## with the same name as the user. This dbname is just for instantiating a
+  ## connection with the server and doesn't restrict the databases we are trying
+  ## to grab metrics for.
+  ##
+  connection = "host={{ ansible_fqdn }} user={{ hm_griffin__dbuser }} password={{ hm_griffin__dbpswd }} sslmode=verify-full dbname={{ hm_griffin__dbname }}"
+
+  ## Update existing tables to match the incoming metrics automatically. Default is true
+  # do_schema_updates = true
+
+  ## Store tags as foreign keys in the metrics table. Default is false.
+  # tags_as_foreignkeys = false
+
+  ## If tags_as_foreignkeys is set to true you can choose the number of tag sets to cache
+  ## per measurement (metric name). Default is 1000, if set to 0 => cache has no limit.
+  ## Has no effect if tags_as_foreignkeys = false
+  # cached_tagsets_per_measurement = 1000
+
+  ## Template to use for generating tables
+  ## Available Variables:
+  ##   {TABLE} - tablename as identifier
+  ##   {TABLELITERAL} - tablename as string literal
+  ##   {COLUMNS} - column definitions
+  ##   {KEY_COLUMNS} - comma-separated list of key columns (time + tags)
+
+  ## Default template
+  # table_template = "CREATE TABLE IF NOT EXISTS {TABLE}({COLUMNS})"
+  ## Example for timescaledb
+  table_template = "CREATE TABLE IF NOT EXISTS {TABLE}({COLUMNS}); SELECT create_hypertable({TABLELITERAL},'time',chunk_time_interval := '1 week'::interval,if_not_exists := true);"
+
+  ## Schema to create the tables into
+  # schema = "public"
+
+  ## Use jsonb datatype for tags
+  # tags_as_jsonb = false
+
+  ## Use jsonb datatype for fields
+  # fields_as_jsonb = false
+
+
+###############################################################################
+#                            PROCESSOR PLUGINS                                #
+###############################################################################
+
+
+# # Convert values to another metric value type
+# [[processors.converter]]
+#   ## Tags to convert
+#   ##
+#   ## The table key determines the target type, and the array of key-values
+#   ## select the keys to convert.  The array may contain globs.
+#   ##   <target-type> = [<tag-key>...]
+#   [processors.converter.tags]
+#     string = []
+#     integer = []
+#     unsigned = []
+#     boolean = []
+#     float = []
+#
+#   ## Fields to convert
+#   ##
+#   ## The table key determines the target type, and the array of key-values
+#   ## select the keys to convert.  The array may contain globs.
+#   ##   <target-type> = [<field-key>...]
+#   [processors.converter.fields]
+#     tag = []
+#     string = []
+#     integer = []
+#     unsigned = []
+#     boolean = []
+#     float = []
+
+
+# # Map enum values according to given table.
+# [[processors.enum]]
+#   [[processors.enum.mapping]]
+#     ## Name of the field to map
+#     field = "status"
+#
+#     ## Name of the tag to map
+#     # tag = "status"
+#
+#     ## Destination tag or field to be used for the mapped value.  By default the
+#     ## source tag or field is used, overwriting the original value.
+#     dest = "status_code"
+#
+#     ## Default value to be used for all values not contained in the mapping
+#     ## table.  When unset, the unmodified value for the field will be used if no
+#     ## match is found.
+#     # default = 0
+#
+#     ## Table of mappings
+#     [processors.enum.mapping.value_mappings]
+#       green = 1
+#       amber = 2
+#       red = 3
+
+
+# # Apply metric modifications using override semantics.
+# [[processors.override]]
+#   ## All modifications on inputs and aggregators can be overridden:
+#   # name_override = "new_name"
+#   # name_prefix = "new_name_prefix"
+#   # name_suffix = "new_name_suffix"
+#
+#   ## Tags to be added (all values must be strings)
+#   # [processors.override.tags]
+#   #   additional_tag = "tag_value"
+
+
+# # Parse a value in a specified field/tag(s) and add the result in a new metric
+# [[processors.parser]]
+#   ## The name of the fields whose value will be parsed.
+#   parse_fields = []
+#
+#   ## If true, incoming metrics are not emitted.
+#   drop_original = false
+#
+#   ## If set to override, emitted metrics will be merged by overriding the
+#   ## original metric using the newly parsed metrics.
+#   merge = "override"
+#
+#   ## The dataformat to be read from files
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   data_format = "influx"
+
+
+# # Print all metrics that pass through this filter.
+# [[processors.printer]]
+
+
+# # Transforms tag and field values with regex pattern
+# [[processors.regex]]
+#   ## Tag and field conversions defined in a separate sub-tables
+#   # [[processors.regex.tags]]
+#   #   ## Tag to change
+#   #   key = "resp_code"
+#   #   ## Regular expression to match on a tag value
+#   #   pattern = "^(\\d)\\d\\d$"
+#   #   ## Pattern for constructing a new value (${1} represents first subgroup)
+#   #   replacement = "${1}xx"
+#
+#   # [[processors.regex.fields]]
+#   #   key = "request"
+#   #   ## All the power of the Go regular expressions available here
+#   #   ## For example, named subgroups
+#   #   pattern = "^/api(?P<method>/[\\w/]+)\\S*"
+#   #   replacement = "${method}"
+#   #   ## If result_key is present, a new field will be created
+#   #   ## instead of changing existing field
+#   #   result_key = "method"
+#
+#   ## Multiple conversions may be applied for one field sequentially
+#   ## Let's extract one more value
+#   # [[processors.regex.fields]]
+#   #   key = "request"
+#   #   pattern = ".*category=(\\w+).*"
+#   #   replacement = "${1}"
+#   #   result_key = "search_category"
+
+
+# # Rename measurements, tags, and fields that pass through this filter.
+# [[processors.rename]]
+
+
+# # Perform string processing on tags, fields, and measurements
+# [[processors.strings]]
+#   ## Convert a tag value to uppercase
+#   # [[processors.strings.uppercase]]
+#   #   tag = "method"
+#
+#   ## Convert a field value to lowercase and store in a new field
+#   # [[processors.strings.lowercase]]
+#   #   field = "uri_stem"
+#   #   dest = "uri_stem_normalised"
+#
+#   ## Trim leading and trailing whitespace using the default cutset
+#   # [[processors.strings.trim]]
+#   #   field = "message"
+#
+#   ## Trim leading characters in cutset
+#   # [[processors.strings.trim_left]]
+#   #   field = "message"
+#   #   cutset = "\t"
+#
+#   ## Trim trailing characters in cutset
+#   # [[processors.strings.trim_right]]
+#   #   field = "message"
+#   #   cutset = "\r\n"
+#
+#   ## Trim the given prefix from the field
+#   # [[processors.strings.trim_prefix]]
+#   #   field = "my_value"
+#   #   prefix = "my_"
+#
+#   ## Trim the given suffix from the field
+#   # [[processors.strings.trim_suffix]]
+#   #   field = "read_count"
+#   #   suffix = "_count"
+#
+#   ## Replace all non-overlapping instances of old with new
+#   # [[processors.strings.replace]]
+#   #   measurement = "*"
+#   #   old = ":"
+#   #   new = "_"
+
+
+# # Print all metrics that pass through this filter.
+# [[processors.topk]]
+#   ## How many seconds between aggregations
+#   # period = 10
+#
+#   ## How many top metrics to return
+#   # k = 10
+#
+#   ## Over which tags should the aggregation be done. Globs can be specified, in
+#   ## which case any tag matching the glob will aggregated over. If set to an
+#   ## empty list is no aggregation over tags is done
+#   # group_by = ['*']
+#
+#   ## Over which fields are the top k are calculated
+#   # fields = ["value"]
+#
+#   ## What aggregation to use. Options: sum, mean, min, max
+#   # aggregation = "mean"
+#
+#   ## Instead of the top k largest metrics, return the bottom k lowest metrics
+#   # bottomk = false
+#
+#   ## The plugin assigns each metric a GroupBy tag generated from its name and
+#   ## tags. If this setting is different than "" the plugin will add a
+#   ## tag (which name will be the value of this setting) to each metric with
+#   ## the value of the calculated GroupBy tag. Useful for debugging
+#   # add_groupby_tag = ""
+#
+#   ## These settings provide a way to know the position of each metric in
+#   ## the top k. The 'add_rank_field' setting allows to specify for which
+#   ## fields the position is required. If the list is non empty, then a field
+#   ## will be added to each and every metric for each string present in this
+#   ## setting. This field will contain the ranking of the group that
+#   ## the metric belonged to when aggregated over that field.
+#   ## The name of the field will be set to the name of the aggregation field,
+#   ## suffixed with the string '_topk_rank'
+#   # add_rank_fields = []
+#
+#   ## These settings provide a way to know what values the plugin is generating
+#   ## when aggregating metrics. The 'add_agregate_field' setting allows to
+#   ## specify for which fields the final aggregation value is required. If the
+#   ## list is non empty, then a field will be added to each every metric for
+#   ## each field present in this setting. This field will contain
+#   ## the computed aggregation for the group that the metric belonged to when
+#   ## aggregated over that field.
+#   ## The name of the field will be set to the name of the aggregation field,
+#   ## suffixed with the string '_topk_aggregate'
+#   # add_aggregate_fields = []
+
+
+###############################################################################
+#                            AGGREGATOR PLUGINS                               #
+###############################################################################
+
+
+# # Keep the aggregate basicstats of each metric passing through.
+# [[aggregators.basicstats]]
+#   ## The period on which to flush & clear the aggregator.
+#   period = "30s"
+#   ## If true, the original metric will be dropped by the
+#   ## aggregator and will not get sent to the output plugins.
+#   drop_original = false
+#
+#   ## Configures which basic stats to push as fields
+#   # stats = ["count", "min", "max", "mean", "stdev", "s2", "sum"]
+
+
+# # Report the final metric of a series
+# [[aggregators.final]]
+#   ## The period on which to flush & clear the aggregator.
+#   period = "30s"
+#   ## If true, the original metric will be dropped by the
+#   ## aggregator and will not get sent to the output plugins.
+#   drop_original = false
+#
+#   ## The time that a series is not updated until considering it final.
+#   series_timeout = "5m"
+
+
+# # Create aggregate histograms.
+# [[aggregators.histogram]]
+#   ## The period in which to flush the aggregator.
+#   period = "30s"
+#
+#   ## If true, the original metric will be dropped by the
+#   ## aggregator and will not get sent to the output plugins.
+#   drop_original = false
+#
+#   ## If true, the histogram will be reset on flush instead
+#   ## of accumulating the results.
+#   reset = false
+#
+#   ## Example config that aggregates all fields of the metric.
+#   # [[aggregators.histogram.config]]
+#   #   ## The set of buckets.
+#   #   buckets = [0.0, 15.6, 34.5, 49.1, 71.5, 80.5, 94.5, 100.0]
+#   #   ## The name of metric.
+#   #   measurement_name = "cpu"
+#
+#   ## Example config that aggregates only specific fields of the metric.
+#   # [[aggregators.histogram.config]]
+#   #   ## The set of buckets.
+#   #   buckets = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+#   #   ## The name of metric.
+#   #   measurement_name = "diskio"
+#   #   ## The concrete fields of metric
+#   #   fields = ["io_time", "read_time", "write_time"]
+
+
+# # Keep the aggregate min/max of each metric passing through.
+# [[aggregators.minmax]]
+#   ## General Aggregator Arguments:
+#   ## The period on which to flush & clear the aggregator.
+#   period = "30s"
+#   ## If true, the original metric will be dropped by the
+#   ## aggregator and will not get sent to the output plugins.
+#   drop_original = false
+
+
+# # Count the occurrence of values in fields.
+# [[aggregators.valuecounter]]
+#   ## General Aggregator Arguments:
+#   ## The period on which to flush & clear the aggregator.
+#   period = "30s"
+#   ## If true, the original metric will be dropped by the
+#   ## aggregator and will not get sent to the output plugins.
+#   drop_original = false
+#   ## The fields for which the values will be counted
+#   fields = []
+
+
+###############################################################################
+#                            INPUT PLUGINS                                    #
+###############################################################################
+
+
+# Read metrics about cpu usage
+[[inputs.cpu]]
+  ## Whether to report per-cpu stats or not
+  percpu = true
+  ## Whether to report total system cpu stats or not
+  totalcpu = true
+  ## If true, collect raw CPU time metrics.
+  collect_cpu_time = false
+  ## If true, compute and report the sum of all non-idle CPU states.
+  report_active = false
+
+
+# Read metrics about disk usage by mount point
+[[inputs.disk]]
+  ## By default stats will be gathered for all mount points.
+  ## Set mount_points will restrict the stats to only the specified mount points.
+  # mount_points = ["/"]
+
+  ## Ignore mount points by filesystem type.
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs"]
+
+
+# Read metrics about disk IO by device
+[[inputs.diskio]]
+  ## By default, telegraf will gather stats for all devices including
+  ## disk partitions.
+  ## Setting devices will restrict the stats to the specified devices.
+  # devices = ["sda", "sdb", "vd*"]
+  ## Uncomment the following line if you need disk serial numbers.
+  # skip_serial_number = false
+  #
+  ## On systems which support it, device metadata can be added in the form of
+  ## tags.
+  ## Currently only Linux is supported via udev properties. You can view
+  ## available properties for a device by running:
+  ## 'udevadm info -q property -n /dev/sda'
+  ## Note: Most, but not all, udev properties can be accessed this way. Properties
+  ## that are currently inaccessible include DEVTYPE, DEVNAME, and DEVPATH.
+  # device_tags = ["ID_FS_TYPE", "ID_FS_USAGE"]
+  #
+  ## Using the same metadata source as device_tags, you can also customize the
+  ## name of the device via templates.
+  ## The 'name_templates' parameter is a list of templates to try and apply to
+  ## the device. The template may contain variables in the form of '$PROPERTY' or
+  ## '${PROPERTY}'. The first template which does not contain any variables not
+  ## present for the device is used as the device name tag.
+  ## The typical use case is for LVM volumes, to get the VG/LV name instead of
+  ## the near-meaningless DM-0 name.
+  # name_templates = ["$ID_FS_LABEL","$DM_VG_NAME/$DM_LV_NAME"]
+
+
+# Get kernel statistics from /proc/stat
+[[inputs.kernel]]
+  # no configuration
+
+
+# Read metrics about memory usage
+[[inputs.mem]]
+  # no configuration
+
+
+# Get the number of processes and group them by status
+[[inputs.processes]]
+  # no configuration
+
+
+# Read metrics about swap memory usage
+[[inputs.swap]]
+  # no configuration
+
+
+# Read metrics about system load & uptime
+[[inputs.system]]
+  # Remove deprecated metrics.
+  fielddrop = ["uptime_format"]
+
+
+# Read metrics about network interface usage
+[[inputs.net]]
+  # By default, telegraf gathers stats from any up interface (excluding loopback)
+  # Setting interfaces will tell it to gather these explicit interfaces,
+  # regardless of status.
+  #
+  # interfaces = ["eth0"]
+  #
+  # On linux systems telegraf also collects protocol stats.
+  # Setting ignore_protocol_stats to true will skip reporting of protocol metrics.
+  #
+  # ignore_protocol_stats = false
+
+
+# Read TCP metrics such as established, time wait and sockets counts.
+[[inputs.netstat]]
+  # no configuration
+
+
+###############################################################################
+#                        AVAILABLE INPUT PLUGINS                              #
+###############################################################################
+
+# # Read Apache status information (mod_status)
+# [[inputs.apache]]
+#   ## An array of URLs to gather from, must be directed at the machine
+#   ## readable version of the mod_status page including the auto query string.
+#   ## Default is "http://localhost/server-status?auto".
+#   urls = ["http://localhost/server-status?auto"]
+#
+#   ## Credentials for basic HTTP authentication.
+#   # username = "myuser"
+#   # password = "mypassword"
+#
+#   ## Maximum time to receive response.
+#   # response_timeout = "5s"
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+
+
+# # Read BIND nameserver XML statistics
+# [[inputs.bind]]
+#   ## An array of BIND XML statistics URI to gather stats.
+#   ## Default is "http://localhost:8053/xml/v3".
+#   # urls = ["http://localhost:8053/xml/v3"]
+#   # gather_memory_contexts = false
+#   # gather_views = false
+
+
+# # Query given DNS server and gives statistics
+# [[inputs.dns_query]]
+#   ## servers to query
+#   servers = ["8.8.8.8"]
+#
+#   ## Network is the network protocol name.
+#   # network = "udp"
+#
+#   ## Domains or subdomains to query.
+#   # domains = ["."]
+#
+#   ## Query record type.
+#   ## Posible values: A, AAAA, CNAME, MX, NS, PTR, TXT, SOA, SPF, SRV.
+#   # record_type = "A"
+#
+#   ## Dns server port.
+#   # port = 53
+#
+#   ## Query timeout in seconds.
+#   # timeout = 2
+
+
+# # Read metrics about docker containers
+# [[inputs.docker]]
+#   ## Docker Endpoint
+#   ##   To use TCP, set endpoint = "tcp://[ip]:[port]"
+#   ##   To use environment variables (ie, docker-machine), set endpoint = "ENV"
+#   endpoint = "unix:///var/run/docker.sock"
+#
+#   ## Set to true to collect Swarm metrics(desired_replicas, running_replicas)
+#   gather_services = false
+#
+#   ## Only collect metrics for these containers, collect all if empty
+#   container_names = []
+#
+#   ## Containers to include and exclude. Globs accepted.
+#   ## Note that an empty array for both will include all containers
+#   container_name_include = []
+#   container_name_exclude = []
+#
+#   ## Container states to include and exclude. Globs accepted.
+#   ## When empty only containers in the "running" state will be captured.
+#   # container_state_include = []
+#   # container_state_exclude = []
+#
+#   ## Timeout for docker list, info, and stats commands
+#   timeout = "5s"
+#
+#   ## Whether to report for each container per-device blkio (8:0, 8:1...) and
+#   ## network (eth0, eth1, ...) stats or not
+#   perdevice = true
+#   ## Whether to report for each container total blkio and network stats or not
+#   total = false
+#   ## Which environment variables should we use as a tag
+#   ##tag_env = ["JAVA_HOME", "HEAP_SIZE"]
+#
+#   ## docker labels to include and exclude as tags.  Globs accepted.
+#   ## Note that an empty array for both will include all labels as tags
+#   docker_label_include = []
+#   docker_label_exclude = []
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+
+
+# # Read statistics from one or many dovecot servers
+# [[inputs.dovecot]]
+#   ## specify dovecot servers via an address:port list
+#   ##  e.g.
+#   ##    localhost:24242
+#   ##
+#   ## If no servers are specified, then localhost is used as the host.
+#   servers = ["localhost:24242"]
+#   ## Type is one of "user", "domain", "ip", or "global"
+#   type = "global"
+#   ## Wildcard matches like "*.com". An empty string "" is same as "*"
+#   ## If type = "ip" filters should be <IP/network>
+#   filters = [""]
+
+
+# # Read metrics from one or more commands that can output to stdout
+# [[inputs.exec]]
+#   ## Commands array
+#   commands = [
+#     "/tmp/test.sh",
+#     "/usr/bin/mycollector --foo=bar",
+#     "/tmp/collect_*.sh"
+#   ]
+#
+#   ## Timeout for each command to complete.
+#   timeout = "5s"
+#
+#   ## measurement name suffix (for separating different commands)
+#   name_suffix = "_mycollector"
+#
+#   ## Data format to consume.
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   data_format = "influx"
+
+
+# # Read metrics from fail2ban.
+# [[inputs.fail2ban]]
+#   ## Use sudo to run fail2ban-client
+#   use_sudo = false
+
+
+# # Reload and gather from file[s] on telegraf's interval.
+# [[inputs.file]]
+#   ## Files to parse each interval.
+#   ## These accept standard unix glob matching rules, but with the addition of
+#   ## ** as a "super asterisk". ie:
+#   ##   /var/log/**.log     -> recursively find all .log files in /var/log
+#   ##   /var/log/*/*.log    -> find all .log files with a parent dir in /var/log
+#   ##   /var/log/apache.log -> only read the apache log file
+#   files = ["/var/log/apache/access.log"]
+#
+#   ## The dataformat to be read from files
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   data_format = "influx"
+
+
+# # Count files in a directory
+# [[inputs.filecount]]
+#   ## Directory to gather stats about.
+#   ##   deprecated in 1.9; use the directories option
+#   # directory = "/var/cache/apt/archives"
+#
+#   ## Directories to gather stats about.
+#   ## This accept standard unit glob matching rules, but with the addition of
+#   ## ** as a "super asterisk". ie:
+#   ##   /var/log/**    -> recursively find all directories in /var/log and count files in each directories
+#   ##   /var/log/*/*   -> find all directories with a parent dir in /var/log and count files in each directories
+#   ##   /var/log       -> count all files in /var/log and all of its subdirectories
+#   directories = ["/var/cache/apt/archives"]
+#
+#   ## Only count files that match the name pattern. Defaults to "*".
+#   name = "*.deb"
+#
+#   ## Count files in subdirectories. Defaults to true.
+#   recursive = false
+#
+#   ## Only count regular files. Defaults to true.
+#   regular_only = true
+#
+#   ## Only count files that are at least this size. If size is
+#   ## a negative number, only count files that are smaller than the
+#   ## absolute value of size. Acceptable units are B, KiB, MiB, KB, ...
+#   ## Without quotes and units, interpreted as size in bytes.
+#   size = "0B"
+#
+#   ## Only count files that have not been touched for at least this
+#   ## duration. If mtime is negative, only count files that have been
+#   ## touched in this duration. Defaults to "0s".
+#   mtime = "0s"
+
+
+# # Read stats about given file(s)
+# [[inputs.filestat]]
+#   ## Files to gather stats about.
+#   ## These accept standard unix glob matching rules, but with the addition of
+#   ## ** as a "super asterisk". ie:
+#   ##   "/var/log/**.log"  -> recursively find all .log files in /var/log
+#   ##   "/var/log/*/*.log" -> find all .log files with a parent dir in /var/log
+#   ##   "/var/log/apache.log" -> just tail the apache log file
+#   ##
+#   ## See https://github.com/gobwas/glob for more examples
+#   ##
+#   files = ["/var/log/**.log"]
+#   ## If true, read the entire file and calculate an md5 checksum.
+#   md5 = false
+
+
+# # Gather repository information from GitHub hosted repositories.
+# [[inputs.github]]
+#   ## List of repositories to monitor.
+#   repositories = ["influxdata/telegraf"]
+#
+#   ## Github API access token.  Unauthenticated requests are limited to 60 per hour.
+#   # access_token = ""
+#
+#   ## Timeout for HTTP requests.
+#   # http_timeout = "5s"
+
+
+# # Monitor disks' temperatures using hddtemp
+# [[inputs.hddtemp]]
+#   ## By default, telegraf gathers temps data from all disks detected by the
+#   ## hddtemp.
+#   ##
+#   ## Only collect temps from the selected disks.
+#   ##
+#   ## A * as the device name will return the temperature values of all disks.
+#   ##
+#   # address = "127.0.0.1:7634"
+#   # devices = ["sda", "*"]
+
+
+# # Read formatted metrics from one or more HTTP endpoints
+# [[inputs.http]]
+#   ## One or more URLs from which to read formatted metrics
+#   urls = [
+#     "http://localhost/metrics"
+#   ]
+#
+#   ## HTTP method
+#   # method = "GET"
+#
+#   ## Optional HTTP headers
+#   # headers = {"X-Special-Header" = "Special-Value"}
+#
+#   ## Optional HTTP Basic Auth Credentials
+#   # username = "username"
+#   # password = "pa$$word"
+#
+#   ## HTTP entity-body to send with POST/PUT requests.
+#   # body = ""
+#
+#   ## HTTP Content-Encoding for write request body, can be set to "gzip" to
+#   ## compress body or "identity" to apply no encoding.
+#   # content_encoding = "identity"
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+#
+#   ## Amount of time allowed to complete the HTTP request
+#   # timeout = "5s"
+#
+#   ## Data format to consume.
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   # data_format = "influx"
+
+
+# # HTTP/HTTPS request given an address a method and a timeout
+# [[inputs.http_response]]
+#   ## Server address (default http://localhost)
+#   # address = "http://localhost"
+#
+#   ## Set http_proxy (telegraf uses the system wide proxy settings if it's is not set)
+#   # http_proxy = "http://localhost:8888"
+#
+#   ## Set response_timeout (default 5 seconds)
+#   # response_timeout = "5s"
+#
+#   ## HTTP Request Method
+#   # method = "GET"
+#
+#   ## Whether to follow redirects from the server (defaults to false)
+#   # follow_redirects = false
+#
+#   ## Optional HTTP Request Body
+#   # body = '''
+#   # {'fake':'data'}
+#   # '''
+#
+#   ## Optional substring or regex match in body of the response
+#   # response_string_match = "\"service_status\": \"up\""
+#   # response_string_match = "ok"
+#   # response_string_match = "\".*_status\".?:.?\"up\""
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+#
+#   ## HTTP Request Headers (all values must be strings)
+#   # [inputs.http_response.headers]
+#   #   Host = "github.com"
+
+
+# # Read flattened metrics from one or more JSON HTTP endpoints
+# [[inputs.httpjson]]
+#   ## NOTE This plugin only reads numerical measurements, strings and booleans
+#   ## will be ignored.
+#
+#   ## Name for the service being polled.  Will be appended to the name of the
+#   ## measurement e.g. httpjson_webserver_stats
+#   ##
+#   ## Deprecated (1.3.0): Use name_override, name_suffix, name_prefix instead.
+#   name = "webserver_stats"
+#
+#   ## URL of each server in the service's cluster
+#   servers = [
+#     "http://localhost:9999/stats/",
+#     "http://localhost:9998/stats/",
+#   ]
+#   ## Set response_timeout (default 5 seconds)
+#   response_timeout = "5s"
+#
+#   ## HTTP method to use: GET or POST (case-sensitive)
+#   method = "GET"
+#
+#   ## List of tag names to extract from top-level of JSON server response
+#   # tag_keys = [
+#   #   "my_tag_1",
+#   #   "my_tag_2"
+#   # ]
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+#
+#   ## HTTP parameters (all values must be strings).  For "GET" requests, data
+#   ## will be included in the query.  For "POST" requests, data will be included
+#   ## in the request body as "x-www-form-urlencoded".
+#   # [inputs.httpjson.parameters]
+#   #   event_type = "cpu_spike"
+#   #   threshold = "0.75"
+#
+#   ## HTTP Headers (all values must be strings)
+#   # [inputs.httpjson.headers]
+#   #   X-Auth-Token = "my-xauth-token"
+#   #   apiVersion = "v1"
+
+
+# # Collect statistics about itself
+# [[inputs.internal]]
+#   ## If true, collect telegraf memory stats.
+#   # collect_memstats = true
+
+
+# # This plugin gathers interrupts data from /proc/interrupts and /proc/softirqs.
+# [[inputs.interrupts]]
+#   ## When set to true, cpu metrics are tagged with the cpu.  Otherwise cpu is
+#   ## stored as a field.
+#   ##
+#   ## The default is false for backwards compatibility, and will be changed to
+#   ## true in a future version.  It is recommended to set to true on new
+#   ## deployments.
+#   # cpu_as_tag = false
+#
+#   ## To filter which IRQs to collect, make use of tagpass / tagdrop, i.e.
+#   # [inputs.interrupts.tagdrop]
+#   #   irq = [ "NET_RX", "TASKLET" ]
+
+
+# # Read metrics from the bare metal servers via IPMI
+# [[inputs.ipmi_sensor]]
+#   ## optionally specify the path to the ipmitool executable
+#   # path = "/usr/bin/ipmitool"
+#   ##
+#   ## optionally force session privilege level. Can be CALLBACK, USER, OPERATOR, ADMINISTRATOR
+#   # privilege = "ADMINISTRATOR"
+#   ##
+#   ## optionally specify one or more servers via a url matching
+#   ##  [username[:password]@][protocol[(address)]]
+#   ##  e.g.
+#   ##    root:passwd@lan(127.0.0.1)
+#   ##
+#   ## if no servers are specified, local machine sensor stats will be queried
+#   ##
+#   # servers = ["USERID:PASSW0RD@lan(192.168.1.1)"]
+#
+#   ## Recommended: use metric 'interval' that is a multiple of 'timeout' to avoid
+#   ## gaps or overlap in pulled data
+#   interval = "30s"
+#
+#   ## Timeout for the ipmitool command to complete
+#   timeout = "20s"
+#
+#   ## Schema Version: (Optional, defaults to version 1)
+#   metric_version = 2
+
+
+# # Gather packets and bytes counters from Linux ipsets
+# [[inputs.ipset]]
+#   ## By default, we only show sets which have already matched at least 1 packet.
+#   ## set include_unmatched_sets = true to gather them all.
+#   include_unmatched_sets = false
+#   ## Adjust your sudo settings appropriately if using this option ("sudo ipset save")
+#   use_sudo = false
+#   ## The default timeout of 1s for ipset execution can be overridden here:
+#   # timeout = "1s"
+
+
+# # Gather packets and bytes throughput from iptables
+# [[inputs.iptables]]
+#   ## iptables require root access on most systems.
+#   ## Setting 'use_sudo' to true will make use of sudo to run iptables.
+#   ## Users must configure sudo to allow telegraf user to run iptables with no password.
+#   ## iptables can be restricted to only list command "iptables -nvL".
+#   use_sudo = false
+#   ## Setting 'use_lock' to true runs iptables with the "-w" option.
+#   ## Adjust your sudo settings appropriately if using this option ("iptables -wnvl")
+#   use_lock = false
+#   ## Define an alternate executable, such as "ip6tables". Default is "iptables".
+#   # binary = "ip6tables"
+#   ## defines the table to monitor:
+#   table = "filter"
+#   ## defines the chains to monitor.
+#   ## NOTE: iptables rules without a comment will not be monitored.
+#   ## Read the plugin documentation for more information.
+#   chains = [ "INPUT" ]
+
+
+# # Collect virtual and real server stats from Linux IPVS
+# [[inputs.ipvs]]
+#   # no configuration
+
+
+# # Get kernel statistics from /proc/vmstat
+# [[inputs.kernel_vmstat]]
+#   # no configuration
+
+
+# # Provides Linux sysctl fs metrics
+# [[inputs.linux_sysctl_fs]]
+#   # no configuration
+
+
+# # Aggregates the contents of multiple files into a single point
+# [[inputs.multifile]]
+#   ## Base directory where telegraf will look for files.
+#   ## Omit this option to use absolute paths.
+#   base_dir = "/sys/bus/i2c/devices/1-0076/iio:device0"
+#
+#   ## If true, Telegraf discard all data when a single file can't be read.
+#   ## Else, Telegraf omits the field generated from this file.
+#   # fail_early = true
+#
+#   ## Files to parse each interval.
+#   [[inputs.multifile.file]]
+#     file = "in_pressure_input"
+#     dest = "pressure"
+#     conversion = "float"
+#   [[inputs.multifile.file]]
+#     file = "in_temp_input"
+#     dest = "temperature"
+#     conversion = "float(3)"
+#   [[inputs.multifile.file]]
+#     file = "in_humidityrelative_input"
+#     dest = "humidityrelative"
+#     conversion = "float(3)"
+
+
+# # Read metrics from one or many mysql servers
+# [[inputs.mysql]]
+#   ## specify servers via a url matching:
+#   ##  [username[:password]@][protocol[(address)]]/[?tls=[true|false|skip-verify|custom]]
+#   ##  see https://github.com/go-sql-driver/mysql#dsn-data-source-name
+#   ##  e.g.
+#   ##    servers = ["user:passwd@tcp(127.0.0.1:3306)/?tls=false"]
+#   ##    servers = ["user@tcp(127.0.0.1:3306)/?tls=false"]
+#   #
+#   ## If no servers are specified, then localhost is used as the host.
+#   servers = ["tcp(127.0.0.1:3306)/"]
+#
+#   ## Selects the metric output format.
+#   ##
+#   ## This option exists to maintain backwards compatibility, if you have
+#   ## existing metrics do not set or change this value until you are ready to
+#   ## migrate to the new format.
+#   ##
+#   ## If you do not have existing metrics from this plugin set to the latest
+#   ## version.
+#   ##
+#   ## Telegraf >=1.6: metric_version = 2
+#   ##           <1.6: metric_version = 1 (or unset)
+#   metric_version = 2
+#
+#   ## the limits for metrics form perf_events_statements
+#   perf_events_statements_digest_text_limit  = 120
+#   perf_events_statements_limit              = 250
+#   perf_events_statements_time_limit         = 86400
+#   #
+#   ## if the list is empty, then metrics are gathered from all databasee tables
+#   table_schema_databases                    = []
+#   #
+#   ## gather metrics from INFORMATION_SCHEMA.TABLES for databases provided above list
+#   gather_table_schema                       = false
+#   #
+#   ## gather thread state counts from INFORMATION_SCHEMA.PROCESSLIST
+#   gather_process_list                       = true
+#   #
+#   ## gather user statistics from INFORMATION_SCHEMA.USER_STATISTICS
+#   gather_user_statistics                    = true
+#   #
+#   ## gather auto_increment columns and max values from information schema
+#   gather_info_schema_auto_inc               = true
+#   #
+#   ## gather metrics from INFORMATION_SCHEMA.INNODB_METRICS
+#   gather_innodb_metrics                     = true
+#   #
+#   ## gather metrics from SHOW SLAVE STATUS command output
+#   gather_slave_status                       = true
+#   #
+#   ## gather metrics from SHOW BINARY LOGS command output
+#   gather_binary_logs                        = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.TABLE_IO_WAITS_SUMMARY_BY_TABLE
+#   gather_table_io_waits                     = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.TABLE_LOCK_WAITS
+#   gather_table_lock_waits                   = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.TABLE_IO_WAITS_SUMMARY_BY_INDEX_USAGE
+#   gather_index_io_waits                     = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.EVENT_WAITS
+#   gather_event_waits                        = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.FILE_SUMMARY_BY_EVENT_NAME
+#   gather_file_events_stats                  = false
+#   #
+#   ## gather metrics from PERFORMANCE_SCHEMA.EVENTS_STATEMENTS_SUMMARY_BY_DIGEST
+#   gather_perf_events_statements             = false
+#   #
+#   ## Some queries we may want to run less often (such as SHOW GLOBAL VARIABLES)
+#   interval_slow                   = "30m"
+#
+#   ## Optional TLS Config (will be used if tls=custom parameter specified in server uri)
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+
+
+# # Collect response time of a TCP or UDP connection
+# [[inputs.net_response]]
+#   ## Protocol, must be "tcp" or "udp"
+#   ## NOTE: because the "udp" protocol does not respond to requests, it requires
+#   ## a send/expect string pair (see below).
+#   protocol = "tcp"
+#   ## Server address (default localhost)
+#   address = "localhost:80"
+#
+#   ## Set timeout
+#   # timeout = "1s"
+#
+#   ## Set read timeout (only used if expecting a response)
+#   # read_timeout = "1s"
+#
+#   ## The following options are required for UDP checks. For TCP, they are
+#   ## optional. The plugin will send the given string to the server and then
+#   ## expect to receive the given 'expect' string back.
+#   ## string sent to the server
+#   # send = "ssh"
+#   ## expected string in answer
+#   # expect = "ssh"
+#
+#   ## Uncomment to remove deprecated fields
+#   # fielddrop = ["result_type", "string_found"]
+
+
+# # Collect kernel snmp counters and network interface statistics
+# [[inputs.nstat]]
+#   ## file paths for proc files. If empty default paths will be used:
+#   ##    /proc/net/netstat, /proc/net/snmp, /proc/net/snmp6
+#   ## These can also be overridden with env variables, see README.
+#   proc_net_netstat = "/proc/net/netstat"
+#   proc_net_snmp = "/proc/net/snmp"
+#   proc_net_snmp6 = "/proc/net/snmp6"
+#   ## dump metrics with 0 values too
+#   dump_zeros       = true
+
+
+# # Get standard NTP query metrics, requires ntpq executable.
+# [[inputs.ntpq]]
+#   ## If false, set the -n ntpq flag. Can reduce metric gather time.
+#   dns_lookup = true
+
+
+# # Ping given url(s) and return statistics
+# [[inputs.ping]]
+#   ## List of urls to ping
+#   urls = ["example.org"]
+#
+#   ## Number of pings to send per collection (ping -c <COUNT>)
+#   # count = 1
+#
+#   ## Interval, in s, at which to ping. 0 == default (ping -i <PING_INTERVAL>)
+#   ## Not available in Windows.
+#   # ping_interval = 1.0
+#
+#   ## Per-ping timeout, in s. 0 == no timeout (ping -W <TIMEOUT>)
+#   # timeout = 1.0
+#
+#   ## Total-ping deadline, in s. 0 == no deadline (ping -w <DEADLINE>)
+#   # deadline = 10
+#
+#   ## Interface or source address to send ping from (ping -I <INTERFACE/SRC_ADDR>)
+#   ## on Darwin and Freebsd only source address possible: (ping -S <SRC_ADDR>)
+#   # interface = ""
+#
+#   ## Specify the ping executable binary, default is "ping"
+#   # binary = "ping"
+#
+#   ## Arguments for ping command
+#   ## when arguments is not empty, other options (ping_interval, timeout, etc) will be ignored
+#   # arguments = ["-c", "3"]
+
+
+# # Measure postfix queue statistics
+# [[inputs.postfix]]
+#   ## Postfix queue directory. If not provided, telegraf will try to use
+#   ## 'postconf -h queue_directory' to determine it.
+#   # queue_directory = "/var/spool/postfix"
+
+
+# # Monitor process cpu and memory usage
+# [[inputs.procstat]]
+#   ## PID file to monitor process
+#   pid_file = "/var/run/nginx.pid"
+#   ## executable name (ie, pgrep <exe>)
+#   # exe = "nginx"
+#   ## pattern as argument for pgrep (ie, pgrep -f <pattern>)
+#   # pattern = "nginx"
+#   ## user as argument for pgrep (ie, pgrep -u <user>)
+#   # user = "nginx"
+#   ## Systemd unit name
+#   # systemd_unit = "nginx.service"
+#   ## CGroup name or path
+#   # cgroup = "systemd/system.slice/nginx.service"
+#
+#   ## Windows service name
+#   # win_service = ""
+#
+#   ## override for process_name
+#   ## This is optional; default is sourced from /proc/<pid>/status
+#   # process_name = "bar"
+#
+#   ## Field name prefix
+#   # prefix = ""
+#
+#   ## When true add the full cmdline as a tag.
+#   # cmdline_tag = false
+#
+#   ## Add PID as a tag instead of a field; useful to differentiate between
+#   ## processes whose tags are otherwise the same.  Can create a large number
+#   ## of series, use judiciously.
+#   # pid_tag = false
+#
+#   ## Method to use when finding process IDs.  Can be one of 'pgrep', or
+#   ## 'native'.  The pgrep finder calls the pgrep executable in the PATH while
+#   ## the native finder performs the search directly in a manor dependent on the
+#   ## platform.  Default is 'pgrep'
+#   # pid_finder = "pgrep"
+
+
+# # Monitor sensors, requires lm-sensors package
+# [[inputs.sensors]]
+#   ## Remove numbers from field names.
+#   ## If true, a field name like 'temp1_input' will be changed to 'temp_input'.
+#   # remove_numbers = true
+#
+#   ## Timeout is the maximum amount of time that the sensors command can run.
+#   # timeout = "5s"
+
+
+# # Read metrics from storage devices supporting S.M.A.R.T.
+# [[inputs.smart]]
+#   ## Optionally specify the path to the smartctl executable
+#   # path = "/usr/bin/smartctl"
+#
+#   ## On most platforms smartctl requires root access.
+#   ## Setting 'use_sudo' to true will make use of sudo to run smartctl.
+#   ## Sudo must be configured to to allow the telegraf user to run smartctl
+#   ## without a password.
+#   # use_sudo = false
+#
+#   ## Skip checking disks in this power mode. Defaults to
+#   ## "standby" to not wake up disks that have stoped rotating.
+#   ## See --nocheck in the man pages for smartctl.
+#   ## smartctl version 5.41 and 5.42 have faulty detection of
+#   ## power mode and might require changing this value to
+#   ## "never" depending on your disks.
+#   # nocheck = "standby"
+#
+#   ## Gather detailed metrics for each SMART Attribute.
+#   # attributes = false
+#
+#   ## Optionally specify devices to exclude from reporting.
+#   # excludes = [ "/dev/pass6" ]
+#
+#   ## Optionally specify devices and device type, if unset
+#   ## a scan (smartctl --scan) for S.M.A.R.T. devices will
+#   ## done and all found will be included except for the
+#   ## excluded in excludes.
+#   # devices = [ "/dev/ada0 -d atacam" ]
+
+
+# # Sysstat metrics collector
+# [[inputs.sysstat]]
+#   ## Path to the sadc command.
+#   #
+#   ## Common Defaults:
+#   ##   Debian/Ubuntu: /usr/lib/sysstat/sadc
+#   ##   Arch:          /usr/lib/sa/sadc
+#   ##   RHEL/CentOS:   /usr/lib64/sa/sadc
+#   sadc_path = "/usr/lib/sa/sadc" # required
+#   #
+#   #
+#   ## Path to the sadf command, if it is not in PATH
+#   # sadf_path = "/usr/bin/sadf"
+#   #
+#   #
+#   ## Activities is a list of activities, that are passed as argument to the
+#   ## sadc collector utility (e.g: DISK, SNMP etc...)
+#   ## The more activities that are added, the more data is collected.
+#   # activities = ["DISK"]
+#   #
+#   #
+#   ## Group metrics to measurements.
+#   ##
+#   ## If group is false each metric will be prefixed with a description
+#   ## and represents itself a measurement.
+#   ##
+#   ## If Group is true, corresponding metrics are grouped to a single measurement.
+#   # group = true
+#   #
+#   #
+#   ## Options for the sadf command. The values on the left represent the sadf
+#   ## options and the values on the right their description (which are used for
+#   ## grouping and prefixing metrics).
+#   ##
+#   ## Run 'sar -h' or 'man sar' to find out the supported options for your
+#   ## sysstat version.
+#   [inputs.sysstat.options]
+#     -C = "cpu"
+#     -B = "paging"
+#     -b = "io"
+#     -d = "disk"             # requires DISK activity
+#     "-n ALL" = "network"
+#     "-P ALL" = "per_cpu"
+#     -q = "queue"
+#     -R = "mem"
+#     -r = "mem_util"
+#     -S = "swap_util"
+#     -u = "cpu_util"
+#     -v = "inode"
+#     -W = "swap"
+#     -w = "task"
+#   #  -H = "hugepages"        # only available for newer linux distributions
+#   #  "-I ALL" = "interrupts" # requires INT activity
+#   #
+#   #
+#   ## Device tags can be used to add additional tags for devices.
+#   ## For example the configuration below adds a tag vg with value rootvg for
+#   ## all metrics with sda devices.
+#   # [[inputs.sysstat.device_tags.sda]]
+#   #  vg = "rootvg"
+
+
+# # Read metrics about temperature
+# [[inputs.temp]]
+#   # no configuration
+
+
+# # A plugin to collect stats from the Unbound DNS resolver
+# [[inputs.unbound]]
+#   ## Address of server to connect to, read from unbound conf default, optionally ':port'
+#   ## Will lookup IP if given a hostname
+#   server = "127.0.0.1:8953"
+#
+#   ## If running as a restricted user you can prepend sudo for additional access:
+#   # use_sudo = false
+#
+#   ## The default location of the unbound-control binary can be overridden with:
+#   # binary = "/usr/sbin/unbound-control"
+#
+#   ## The default timeout of 1s can be overriden with:
+#   # timeout = "1s"
+#
+#   ## When set to true, thread metrics are tagged with the thread id.
+#   ##
+#   ## The default is false for backwards compatibility, and will be changed to
+#   ## true in a future version.  It is recommended to set to true on new
+#   ## deployments.
+#   thread_as_tag = false
+
+
+# # Reads metrics from a SSL certificate
+# [[inputs.x509_cert]]
+#   ## List certificate sources
+#   sources = ["/etc/ssl/certs/ssl-cert-snakeoil.pem", "tcp://example.org:443"]
+#
+#   ## Timeout for SSL connection
+#   # timeout = "5s"
+#
+#   ## Optional TLS Config
+#   # tls_ca = "/etc/telegraf/ca.pem"
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#
+#   ## Use TLS but skip chain & host verification
+#   # insecure_skip_verify = false
+
+
+###############################################################################
+#                            SERVICE INPUT PLUGINS                            #
+###############################################################################
+
+
+# # Influx HTTP write listener
+# [[inputs.http_listener]]
+#   ## Address and port to host HTTP listener on
+#   service_address = ":8186"
+#
+#   ## maximum duration before timing out read of the request
+#   read_timeout = "10s"
+#   ## maximum duration before timing out write of the response
+#   write_timeout = "10s"
+#
+#   ## Maximum allowed http request body size in bytes.
+#   ## 0 means to use the default of 524,288,000 bytes (500 mebibytes)
+#   max_body_size = "500MiB"
+#
+#   ## Maximum line size allowed to be sent in bytes.
+#   ## 0 means to use the default of 65536 bytes (64 kibibytes)
+#   max_line_size = "64KiB"
+#
+#   ## Set one or more allowed client CA certificate file names to
+#   ## enable mutually authenticated TLS connections
+#   tls_allowed_cacerts = ["/etc/telegraf/clientca.pem"]
+#
+#   ## Add service certificate and key
+#   tls_cert = "/etc/telegraf/cert.pem"
+#   tls_key = "/etc/telegraf/key.pem"
+#
+#   ## Optional username and password to accept for HTTP basic authentication.
+#   ## You probably want to make sure you have TLS configured above for this.
+#   # basic_username = "foobar"
+#   # basic_password = "barfoo"
+
+
+# # Generic HTTP write listener
+# [[inputs.http_listener_v2]]
+#   ## Address and port to host HTTP listener on
+#   service_address = ":8080"
+#
+#   ## Path to listen to.
+#   # path = "/telegraf"
+#
+#   ## HTTP methods to accept.
+#   # methods = ["POST", "PUT"]
+#
+#   ## maximum duration before timing out read of the request
+#   # read_timeout = "10s"
+#   ## maximum duration before timing out write of the response
+#   # write_timeout = "10s"
+#
+#   ## Maximum allowed http request body size in bytes.
+#   ## 0 means to use the default of 524,288,00 bytes (500 mebibytes)
+#   # max_body_size = "500MB"
+#
+#   ## Set one or more allowed client CA certificate file names to
+#   ## enable mutually authenticated TLS connections
+#   # tls_allowed_cacerts = ["/etc/telegraf/clientca.pem"]
+#
+#   ## Add service certificate and key
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#
+#   ## Optional username and password to accept for HTTP basic authentication.
+#   ## You probably want to make sure you have TLS configured above for this.
+#   # basic_username = "foobar"
+#   # basic_password = "barfoo"
+#
+#   ## Data format to consume.
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   data_format = "influx"
+
+
+# # Stream and parse log file(s).
+# [[inputs.logparser]]
+#   ## Log files to parse.
+#   ## These accept standard unix glob matching rules, but with the addition of
+#   ## ** as a "super asterisk". ie:
+#   ##   /var/log/**.log     -> recursively find all .log files in /var/log
+#   ##   /var/log/*/*.log    -> find all .log files with a parent dir in /var/log
+#   ##   /var/log/apache.log -> only tail the apache log file
+#   files = ["/var/log/apache/access.log"]
+#
+#   ## Read files that currently exist from the beginning. Files that are created
+#   ## while telegraf is running (and that match the "files" globs) will always
+#   ## be read from the beginning.
+#   from_beginning = false
+#
+#   ## Method used to watch for file updates.  Can be either "inotify" or "poll".
+#   # watch_method = "inotify"
+#
+#   ## Parse logstash-style "grok" patterns:
+#   [inputs.logparser.grok]
+#     ## This is a list of patterns to check the given log file(s) for.
+#     ## Note that adding patterns here increases processing time. The most
+#     ## efficient configuration is to have one pattern per logparser.
+#     ## Other common built-in patterns are:
+#     ##   %{COMMON_LOG_FORMAT}   (plain apache & nginx access logs)
+#     ##   %{COMBINED_LOG_FORMAT} (access logs + referrer & agent)
+#     patterns = ["%{COMBINED_LOG_FORMAT}"]
+#
+#     ## Name of the outputted measurement name.
+#     measurement = "apache_access_log"
+#
+#     ## Full path(s) to custom pattern files.
+#     custom_pattern_files = []
+#
+#     ## Custom patterns can also be defined here. Put one pattern per line.
+#     custom_patterns = '''
+#     '''
+#
+#     ## Timezone allows you to provide an override for timestamps that
+#     ## don't already include an offset
+#     ## e.g. 04/06/2016 12:41:45 data one two 5.43µs
+#     ##
+#     ## Default: "" which renders UTC
+#     ## Options are as follows:
+#     ##   1. Local             -- interpret based on machine localtime
+#     ##   2. "Canada/Eastern"  -- Unix TZ values like those found in https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+#     ##   3. UTC               -- or blank/unspecified, will return timestamp in UTC
+#     # timezone = "Canada/Eastern"
+#
+# 	## When set to "disable", timestamp will not incremented if there is a
+# 	## duplicate.
+#     # unique_timestamp = "auto"
+
+
+# # Read metrics from one or many postgresql servers
+# [[inputs.postgresql]]
+#   ## specify address via a url matching:
+#   ##   postgres://[pqgotest[:password]]@localhost[/dbname]\
+#   ##       ?sslmode=[disable|verify-ca|verify-full]
+#   ## or a simple string:
+#   ##   host=localhost user=pqotest password=... sslmode=... dbname=app_production
+#   ##
+#   ## All connection parameters are optional.
+#   ##
+#   ## Without the dbname parameter, the driver will default to a database
+#   ## with the same name as the user. This dbname is just for instantiating a
+#   ## connection with the server and doesn't restrict the databases we are trying
+#   ## to grab metrics for.
+#   ##
+#   address = "host=localhost user=postgres sslmode=disable"
+#   ## A custom name for the database that will be used as the "server" tag in the
+#   ## measurement output. If not specified, a default one generated from
+#   ## the connection address is used.
+#   # outputaddress = "db01"
+#
+#   ## connection configuration.
+#   ## maxlifetime - specify the maximum lifetime of a connection.
+#   ## default is forever (0s)
+#   max_lifetime = "0s"
+#
+#   ## A  list of databases to explicitly ignore.  If not specified, metrics for all
+#   ## databases are gathered.  Do NOT use with the 'databases' option.
+#   # ignored_databases = ["postgres", "template0", "template1"]
+#
+#   ## A list of databases to pull metrics about. If not specified, metrics for all
+#   ## databases are gathered.  Do NOT use with the 'ignored_databases' option.
+#   # databases = ["app_production", "testing"]
+
+
+# # Read metrics from one or many postgresql servers
+# [[inputs.postgresql_extensible]]
+#   ## specify address via a url matching:
+#   ##   postgres://[pqgotest[:password]]@localhost[/dbname]\
+#   ##       ?sslmode=[disable|verify-ca|verify-full]
+#   ## or a simple string:
+#   ##   host=localhost user=pqotest password=... sslmode=... dbname=app_production
+#   #
+#   ## All connection parameters are optional.  #
+#   ## Without the dbname parameter, the driver will default to a database
+#   ## with the same name as the user. This dbname is just for instantiating a
+#   ## connection with the server and doesn't restrict the databases we are trying
+#   ## to grab metrics for.
+#   #
+#   address = "host=localhost user=postgres sslmode=disable"
+#
+#   ## connection configuration.
+#   ## maxlifetime - specify the maximum lifetime of a connection.
+#   ## default is forever (0s)
+#   max_lifetime = "0s"
+#
+#   ## A list of databases to pull metrics about. If not specified, metrics for all
+#   ## databases are gathered.
+#   ## databases = ["app_production", "testing"]
+#   #
+#   ## A custom name for the database that will be used as the "server" tag in the
+#   ## measurement output. If not specified, a default one generated from
+#   ## the connection address is used.
+#   # outputaddress = "db01"
+#   #
+#   ## Define the toml config where the sql queries are stored
+#   ## New queries can be added, if the withdbname is set to true and there is no
+#   ## databases defined in the 'databases field', the sql query is ended by a
+#   ## 'is not null' in order to make the query succeed.
+#   ## Example :
+#   ## The sqlquery : "SELECT * FROM pg_stat_database where datname" become
+#   ## "SELECT * FROM pg_stat_database where datname IN ('postgres', 'pgbench')"
+#   ## because the databases variable was set to ['postgres', 'pgbench' ] and the
+#   ## withdbname was true. Be careful that if the withdbname is set to false you
+#   ## don't have to define the where clause (aka with the dbname) the tagvalue
+#   ## field is used to define custom tags (separated by commas)
+#   ## The optional "measurement" value can be used to override the default
+#   ## output measurement name ("postgresql").
+#   #
+#   ## Structure :
+#   ## [[inputs.postgresql_extensible.query]]
+#   ##   sqlquery string
+#   ##   version string
+#   ##   withdbname boolean
+#   ##   tagvalue string (comma separated)
+#   ##   measurement string
+#   [[inputs.postgresql_extensible.query]]
+#     sqlquery="SELECT * FROM pg_stat_database"
+#     version=901
+#     withdbname=false
+#     tagvalue=""
+#     measurement=""
+#   [[inputs.postgresql_extensible.query]]
+#     sqlquery="SELECT * FROM pg_stat_bgwriter"
+#     version=901
+#     withdbname=false
+#     tagvalue="postgresql.stats"
+
+
+# # Generic socket listener capable of handling multiple socket types.
+# [[inputs.socket_listener]]
+#   ## URL to listen on
+#   # service_address = "tcp://:8094"
+#   # service_address = "tcp://127.0.0.1:http"
+#   # service_address = "tcp4://:8094"
+#   # service_address = "tcp6://:8094"
+#   # service_address = "tcp6://[2001:db8::1]:8094"
+#   # service_address = "udp://:8094"
+#   # service_address = "udp4://:8094"
+#   # service_address = "udp6://:8094"
+#   # service_address = "unix:///tmp/telegraf.sock"
+#   # service_address = "unixgram:///tmp/telegraf.sock"
+#
+#   ## Change the file mode bits on unix sockets.  These permissions may not be
+#   ## respected by some platforms, to safely restrict write permissions it is best
+#   ## to place the socket into a directory that has previously been created
+#   ## with the desired permissions.
+#   ##   ex: socket_mode = "777"
+#   # socket_mode = ""
+#
+#   ## Maximum number of concurrent connections.
+#   ## Only applies to stream sockets (e.g. TCP).
+#   ## 0 (default) is unlimited.
+#   # max_connections = 1024
+#
+#   ## Read timeout.
+#   ## Only applies to stream sockets (e.g. TCP).
+#   ## 0 (default) is unlimited.
+#   # read_timeout = "30s"
+#
+#   ## Optional TLS configuration.
+#   ## Only applies to stream sockets (e.g. TCP).
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key  = "/etc/telegraf/key.pem"
+#   ## Enables client authentication if set.
+#   # tls_allowed_cacerts = ["/etc/telegraf/clientca.pem"]
+#
+#   ## Maximum socket buffer size (in bytes when no unit specified).
+#   ## For stream sockets, once the buffer fills up, the sender will start backing up.
+#   ## For datagram sockets, once the buffer fills up, metrics will start dropping.
+#   ## Defaults to the OS default.
+#   # read_buffer_size = "64KiB"
+#
+#   ## Period between keep alive probes.
+#   ## Only applies to TCP sockets.
+#   ## 0 disables keep alive probes.
+#   ## Defaults to the OS configuration.
+#   # keep_alive_period = "5m"
+#
+#   ## Data format to consume.
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   # data_format = "influx"
+
+
+# # Statsd UDP/TCP Server
+# [[inputs.statsd]]
+#   ## Protocol, must be "tcp", "udp", "udp4" or "udp6" (default=udp)
+#   protocol = "udp"
+#
+#   ## MaxTCPConnection - applicable when protocol is set to tcp (default=250)
+#   max_tcp_connections = 250
+#
+#   ## Enable TCP keep alive probes (default=false)
+#   tcp_keep_alive = false
+#
+#   ## Specifies the keep-alive period for an active network connection.
+#   ## Only applies to TCP sockets and will be ignored if tcp_keep_alive is false.
+#   ## Defaults to the OS configuration.
+#   # tcp_keep_alive_period = "2h"
+#
+#   ## Address and port to host UDP listener on
+#   service_address = ":8125"
+#
+#   ## The following configuration options control when telegraf clears it's cache
+#   ## of previous values. If set to false, then telegraf will only clear it's
+#   ## cache when the daemon is restarted.
+#   ## Reset gauges every interval (default=true)
+#   delete_gauges = true
+#   ## Reset counters every interval (default=true)
+#   delete_counters = true
+#   ## Reset sets every interval (default=true)
+#   delete_sets = true
+#   ## Reset timings & histograms every interval (default=true)
+#   delete_timings = true
+#
+#   ## Percentiles to calculate for timing & histogram stats
+#   percentiles = [90]
+#
+#   ## separator to use between elements of a statsd metric
+#   metric_separator = "_"
+#
+#   ## Parses tags in the datadog statsd format
+#   ## http://docs.datadoghq.com/guides/dogstatsd/
+#   parse_data_dog_tags = false
+#
+#   ## Parses datadog extensions to the statsd format
+#   datadog_extensions = false
+#
+#   ## Statsd data translation templates, more info can be read here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/TEMPLATE_PATTERN.md
+#   # templates = [
+#   #     "cpu.* measurement*"
+#   # ]
+#
+#   ## Number of UDP messages allowed to queue up, once filled,
+#   ## the statsd server will start dropping packets
+#   allowed_pending_messages = 10000
+#
+#   ## Number of timing/histogram values to track per-measurement in the
+#   ## calculation of percentiles. Raising this limit increases the accuracy
+#   ## of percentiles but also increases the memory usage and cpu time.
+#   percentile_limit = 1000
+
+
+# # Accepts syslog messages following RFC5424 format with transports as per RFC5426, RFC5425, or RFC6587
+# [[inputs.syslog]]
+#   ## Specify an ip or hostname with port - eg., tcp://localhost:6514, tcp://10.0.0.1:6514
+#   ## Protocol, address and port to host the syslog receiver.
+#   ## If no host is specified, then localhost is used.
+#   ## If no port is specified, 6514 is used (RFC5425#section-4.1).
+#   server = "tcp://:6514"
+#
+#   ## TLS Config
+#   # tls_allowed_cacerts = ["/etc/telegraf/ca.pem"]
+#   # tls_cert = "/etc/telegraf/cert.pem"
+#   # tls_key = "/etc/telegraf/key.pem"
+#
+#   ## Period between keep alive probes.
+#   ## 0 disables keep alive probes.
+#   ## Defaults to the OS configuration.
+#   ## Only applies to stream sockets (e.g. TCP).
+#   # keep_alive_period = "5m"
+#
+#   ## Maximum number of concurrent connections (default = 0).
+#   ## 0 means unlimited.
+#   ## Only applies to stream sockets (e.g. TCP).
+#   # max_connections = 1024
+#
+#   ## Read timeout is the maximum time allowed for reading a single message (default = 5s).
+#   ## 0 means unlimited.
+#   # read_timeout = "5s"
+#
+#   ## The framing technique with which it is expected that messages are transported (default = "octet-counting").
+#   ## Whether the messages come using the octect-counting (RFC5425#section-4.3.1, RFC6587#section-3.4.1),
+#   ## or the non-transparent framing technique (RFC6587#section-3.4.2).
+#   ## Must be one of "octet-counting", "non-transparent".
+#   # framing = "octet-counting"
+#
+#   ## The trailer to be expected in case of non-trasparent framing (default = "LF").
+#   ## Must be one of "LF", or "NUL".
+#   # trailer = "LF"
+#
+#   ## Whether to parse in best effort mode or not (default = false).
+#   ## By default best effort parsing is off.
+#   # best_effort = false
+#
+#   ## Character to prepend to SD-PARAMs (default = "_").
+#   ## A syslog message can contain multiple parameters and multiple identifiers within structured data section.
+#   ## Eg., [id1 name1="val1" name2="val2"][id2 name1="val1" nameA="valA"]
+#   ## For each combination a field is created.
+#   ## Its name is created concatenating identifier, sdparam_separator, and parameter name.
+#   # sdparam_separator = "_"
+
+
+# # Stream a log file, like the tail -f command
+# [[inputs.tail]]
+#   ## files to tail.
+#   ## These accept standard unix glob matching rules, but with the addition of
+#   ## ** as a "super asterisk". ie:
+#   ##   "/var/log/**.log"  -> recursively find all .log files in /var/log
+#   ##   "/var/log/*/*.log" -> find all .log files with a parent dir in /var/log
+#   ##   "/var/log/apache.log" -> just tail the apache log file
+#   ##
+#   ## See https://github.com/gobwas/glob for more examples
+#   ##
+#   files = ["/var/mymetrics.out"]
+#   ## Read file from beginning.
+#   from_beginning = false
+#   ## Whether file is a named pipe
+#   pipe = false
+#
+#   ## Method used to watch for file updates.  Can be either "inotify" or "poll".
+#   # watch_method = "inotify"
+#
+#   ## Data format to consume.
+#   ## Each data format has its own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+#   data_format = "influx"
+
+
+# # Generic TCP listener
+# [[inputs.tcp_listener]]
+#   # DEPRECATED: the TCP listener plugin has been deprecated in favor of the
+#   # socket_listener plugin
+#   # see https://github.com/influxdata/telegraf/tree/master/plugins/inputs/socket_listener
+
+
+# # Generic UDP listener
+# [[inputs.udp_listener]]
+#   # DEPRECATED: the TCP listener plugin has been deprecated in favor of the
+#   # socket_listener plugin
+#   # see https://github.com/influxdata/telegraf/tree/master/plugins/inputs/socket_listener
+
+
+# # A Webhooks Event collector
+# [[inputs.webhooks]]
+#   ## Address and port to host Webhook listener on
+#   service_address = ":1619"
+#
+#   [inputs.webhooks.filestack]
+#     path = "/filestack"
+#
+#   [inputs.webhooks.github]
+#     path = "/github"
+#     # secret = ""
+#
+#   [inputs.webhooks.mandrill]
+#     path = "/mandrill"
+#
+#   [inputs.webhooks.rollbar]
+#     path = "/rollbar"
+#
+#   [inputs.webhooks.papertrail]
+#     path = "/papertrail"
+#
+#   [inputs.webhooks.particle]
+#     path = "/particle"

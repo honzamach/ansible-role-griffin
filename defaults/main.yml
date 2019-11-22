@@ -1,0 +1,61 @@
+---
+
+#
+# URLs leading to GPG keys for signing deb packages.
+#
+hm_griffin__apt_key_url_timescale: https://packagecloud.io/timescale/timescaledb/gpgkey
+hm_griffin__apt_key_url_grafana: https://packages.grafana.com/gpg.key
+
+#
+# Locations of additional APT repositories.
+#
+hm_griffin__apt_repository_timescale: "deb https://packagecloud.io/timescale/timescaledb/debian/ {{ ansible_lsb['codename'] }} main"
+hm_griffin__apt_repository_grafana: "deb https://packages.grafana.com/oss/deb stable main"
+
+#
+# Location of Telegraf Debian package with custom PostgreSQL output plugin.
+#
+hm_griffin__deb_url_telegraf: https://telegrafreleases.blob.core.windows.net/linux/telegraf_1.11.3~with~pg-1_amd64.deb
+
+
+#
+# List of role-related packages, that will be removed from target system.
+#
+hm_griffin__uninstall_list: []
+
+#
+# List of role-related packages, that will be installed on target system.
+#
+hm_griffin__install_list:
+  - adduser
+  - libfontconfig1
+  - software-properties-common
+  - postgresql-11
+  - postgresql-11-ip4r
+  - postgresql-client-11
+  - postgresql-server-dev-11
+  - libpq-dev
+  - pgadmin4
+  - python-psycopg2
+  - python3-psycopg2
+  - timescaledb-postgresql-11
+  - grafana
+
+#
+# Force APT cache update before installing any packages ('yes','no').
+#
+hm_griffin__apt_force_update: no
+
+#
+# Configurations for database for storing monitoring metrics.
+#
+hm_griffin__dbname: griffin
+hm_griffin__dbuser: griffin
+hm_griffin__dbpswd: griffin
+
+#
+# Configurations for database for Grafana web interface.
+#
+hm_griffin__grafana_dbname: grafana
+hm_griffin__grafana_dbuser: grafana
+hm_griffin__grafana_dbpswd: grafana
