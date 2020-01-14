@@ -37,7 +37,7 @@ app_mode = production
 #################################### Server ####################################
 [server]
 # Protocol (http, https, h2, socket)
-protocol = https
+protocol = http
 
 # The ip address to bind to, empty will bind to all interfaces
 ;http_addr =
@@ -69,8 +69,13 @@ root_url = https://{{ ansible_fqdn }}:3000
 ;enable_gzip = false
 
 # https certs & key file
-cert_file = /etc/ssl/servercert/cert.pem
-cert_key = /etc/ssl/servercert/key.pem
+{% if "servers_certified" in group_names %}
+cert_file = {{ hm_certified__cert_host_dir }}/cert.pem
+cert_key = {{ hm_certified__cert_host_dir }}/key.pem
+{% else %}
+cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
+cert_key = /etc/ssl/private/ssl-cert-snakeoil.key
+{% endif %}
 
 # Unix socket path
 ;socket =
