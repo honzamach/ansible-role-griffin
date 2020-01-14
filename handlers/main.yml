@@ -13,3 +13,8 @@
   service:
     name: grafana-server
     state: restarted
+
+- name: Restart Apache service
+  service:
+    name: apache2
+    state: restarted

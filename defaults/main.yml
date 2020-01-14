@@ -39,6 +39,7 @@ hm_griffin__install_list:
   - python-psycopg2
   - python3-psycopg2
   - timescaledb-postgresql-11
+  - apache2
   - grafana
 
 #
