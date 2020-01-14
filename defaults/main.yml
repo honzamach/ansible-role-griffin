@@ -55,6 +55,24 @@ hm_griffin__dbuser: griffin
 hm_griffin__dbpswd: griffin
 
 #
+# Default list of tables for monitoring metrics.
+#
+hm_griffin__dbtables_default:
+  - cpu
+  - disk
+  - diskio
+  - kernel
+  - mem
+  - net
+  - netstat
+  - processes
+  - system
+  - swap
+
+hm_griffin__dbtables_retention_interval: 4 weeks
+
+
+#
 # Configurations for database for Grafana web interface.
 #
 hm_griffin__grafana_dbname: grafana

@@ -273,3 +273,33 @@
     name: apache2
     state: started
     enabled: yes
+
+
+#-------------------------------------------------------------------------------
+
+
+- name: "Detecting current list of tables in '{{ hm_griffin__dbname }}' database"
+  shell: "psql -d {{ hm_griffin__dbname }} -c \"SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public';\" | tail -n +3 | head -n -2 | sed -e \"s/ //\""
+  register: hm_griffin__dbtables
+  changed_when: False
+
+- debug:
+    var: hm_griffin__dbtables
+  tags:
+    - debug
+
+- name: "Configuring data retention cronjob for '{{ hm_griffin__dbname }}' database"
+  template:
+    src: "{{ item }}"
+    dest: /etc/cron.d/griffin-data-retention
+    owner: root
+    group: root
+    mode: 0644
+  with_first_found:
+    - "inventory/host_files/{{ inventory_hostname }}/honzamach.griffin/griffin-data-retention.cron.j2"
+    - "inventory/group_files/servers_{{ msms_server_type }}/honzamach.griffin/griffin-data-retention.cron.{{ ansible_lsb['codename'] }}.j2"
+    - "inventory/group_files/servers_{{ msms_server_type }}/honzamach.griffin/griffin-data-retention.cron.j2"
+    - "inventory/group_files/servers/honzamach.griffin/griffin-data-retention.cron.{{ ansible_lsb['codename'] }}.j2"
+    - "inventory/group_files/servers/honzamach.griffin/griffin-data-retention.cron.j2"
+    - "griffin-data-retention.cron.{{ ansible_lsb['codename'] }}.j2"
+    - "griffin-data-retention.cron.j2"
