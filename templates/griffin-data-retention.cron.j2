@@ -10,13 +10,13 @@
 # Drop outdated hypertable chunks separatelly for each monitored metrics table.
 {% if hm_griffin__dbtables.stdout_lines %}
 {% for table_name in hm_griffin__dbtables.stdout_lines %}
-0 3 * * * /usr/bin/psql -d {{ hm_griffin__dbname }} -c "SELECT drop_chunks(interval '{{ hm_griffin__dbtables_retention_interval }}', '{{ table_name }}');" 2>&1
+0 3 * * * postgres /usr/bin/psql -d {{ hm_griffin__dbname }} -c "SELECT drop_chunks(interval '{{ hm_griffin__dbtables_retention_interval }}', '{{ table_name }}');" 2>&1
 {% endfor %}
 {% else %}
 {% for table_name in hm_griffin__dbtables_default %}
-0 3 * * * /usr/bin/psql -d {{ hm_griffin__dbname }} -c "SELECT drop_chunks(interval '{{ hm_griffin__dbtables_retention_interval }}', '{{ table_name }}');" 2>&1
+0 3 * * * postgres /usr/bin/psql -d {{ hm_griffin__dbname }} -c "SELECT drop_chunks(interval '{{ hm_griffin__dbtables_retention_interval }}', '{{ table_name }}');" 2>&1
 {% endfor %}
 {% endif %}
 
 # Vacuum the database to keep the performance up.
-10 3 * * * /usr/bin/psql -d {{ hm_griffin__dbname }} -c "VACUUM;" 2>&1
+10 3 * * * postgres /usr/bin/psql -d {{ hm_griffin__dbname }} -c "VACUUM;" 2>&1
