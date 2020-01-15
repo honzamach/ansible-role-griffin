@@ -38,7 +38,7 @@
     update_cache: "{{ hm_griffin__apt_force_update }}"
 
 - name: Autotune PostgreSQL to enable TimescaleDB
-  command: "timescaledb-tune -yes && touch /etc/postgresql/{{ hm_pgsql__major_version }}/main/timescaledb.tuned"
+  shell: "timescaledb-tune -yes && touch /etc/postgresql/{{ hm_pgsql__major_version }}/main/timescaledb.tuned"
   args:
     creates: "/etc/postgresql/{{ hm_pgsql__major_version }}/main/timescaledb.tuned"
   notify:
