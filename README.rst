@@ -3,16 +3,15 @@
 Role **griffin**
 ================================================================================
 
-Ansible role for convenient installation of the custom Griffin monitoring tool.
+.. note::
+
+    This documentation page and role itself is still work in progress.
 
 * `Ansible Galaxy page <https://galaxy.ansible.com/honzamach/griffin>`__
 * `GitHub repository <https://github.com/honzamach/ansible-role-griffin>`__
 * `Travis CI page <https://travis-ci.org/honzamach/ansible-role-griffin>`__
 
-
-Description
---------------------------------------------------------------------------------
-
+Ansible role for convenient installation of the custom Griffin monitoring tool.
 This role attempts to keep the things as simple as possible and performs only
 basic installation of the system. The is a monitoring stack based on following
 free tools:
@@ -22,125 +21,20 @@ free tools:
 * `TimescaleDB <https://www.timescale.com/>`__
 * `Grafana <https://grafana.com/>`__
 
-.. note::
+**Table of Contents:**
 
-    This role supports the :ref:`template customization <section-overview-customize-templates>` feature.
+* :ref:`section-role-griffin-installation`
+* :ref:`section-role-griffin-dependencies`
+* :ref:`section-role-griffin-usage`
+* :ref:`section-role-griffin-variables`
+* :ref:`section-role-griffin-files`
+* :ref:`section-role-griffin-author`
 
-
-Requirements
---------------------------------------------------------------------------------
-
-Python3 with pip3 utility should already be installed on target system.
-
-
-Dependencies
---------------------------------------------------------------------------------
-
-This role is dependent on following roles:
-
-* :ref:`postgresql <section-role-postgresql>`
+This role is part of the `MSMS <https://github.com/honzamach/msms>`__ package.
+Some common features are documented in its :ref:`manual <section-manual>`.
 
 
-Managed files
---------------------------------------------------------------------------------
-
-This role directly manages content of following files on target system:
-
-* ``/etc/telegraf/telegraf.conf``
-* ``/etc/grafana/grafana.ini``
-* ``/etc/grafana/provisioning/datasources/griffin.yaml``
-
-
-Role variables
---------------------------------------------------------------------------------
-
-There are following internal role variables defined in ``defaults/main.yml`` file,
-that can be overriden and adjusted as needed:
-
-.. envvar:: hm_griffin__user
-
-    Name of the UNIX system user for griffin system.
-
-    * *Datatype:* ``string``
-    * *Default:* ``griffin``
-
-.. envvar:: hm_griffin__group
-
-    Name of the UNIX system group for griffin system.
-
-    * *Datatype:* ``string``
-    * *Default:* ``griffin``
-
-.. envvar:: hm_griffin__package_repository_url
-
-    Base URL to package repository.
-
-    * *Datatype:* ``string``
-    * *Default:* ``https://alchemist.cesnet.cz``
-
-.. envvar:: hm_griffin__suite
-
-    Enforce which package suite to install on target servers no matter the membership
-    in groups ``servers-production``, ``servers-demo`` and ``servers-development``.
-
-    * *Datatype:* ``string``
-    * *Default:* (undefined)
-
-.. envvar:: hm_griffin__package_list
-
-    List of griffin-related packages, that will be installed on target system.
-
-    * *Datatype:* ``list of strings``
-    * *Default:* (please see YAML file ``defaults/main.yml``)
-
-.. envvar:: hm_griffin_do_cleanup
-
-    Do system cleanup (flag).
-
-    * *Datatype:* ``boolean``
-    * *Default:* ``false``
-
-.. envvar:: hm_griffin__apt_force_update
-
-    Force APT cache update before installing any packages ('yes','no').
-
-    * *Datatype:* ``string``
-    * *Default:* ``no``
-
-.. envvar:: hm_griffin__check_queue_size
-
-    Monitoring configuration setting for checking queue size in the *incoming* directory.
-
-    * *Datatype:* ``dict``
-    * *Default:* ``{'w': 5000, 'c': 10000}``
-
-.. envvar:: hm_griffin__check_queue_dirs
-
-    Monitoring configuration setting for checking queue size in other than *incoming*
-    directories.
-
-    * *Datatype:* ``dict``
-    * *Default:* ``{'w': 100, 'c': 1000}``
-
-.. envvar:: hm_griffin__deprecated_files
-
-    List of deprecated files and folders that may be stil present after previous
-    versions of griffin system. These will be removed to keep the system tidy.
-
-    * *Datatype:* ``list of strings``
-    * *Default:* (please see YAML file ``defaults/main.yml``)
-
-Additionally this role makes use of following built-in Ansible variables:
-
-.. envvar:: ansible_lsb['codename']
-
-    Debian distribution codename is used for :ref:`template customization <section-overview-customize-templates>`
-    feature.
-
-.. envvar:: group_names
-
-    See section *Group memberships* below for details.
-
+.. _section-role-griffin-installation:
 
 Installation
 --------------------------------------------------------------------------------
@@ -161,15 +55,29 @@ Currently the advantage of using direct Git cloning is the ability to easily upd
 the role when new version comes out.
 
 
-Example Playbook
+.. _section-role-griffin-dependencies:
+
+Dependencies
+--------------------------------------------------------------------------------
+
+This role is dependent on following roles:
+
+* :ref:`postgresql <section-role-postgresql>`
+
+No other roles have dependency on this role.
+
+
+.. _section-role-griffin-usage:
+
+Usage
 --------------------------------------------------------------------------------
 
 Example content of inventory file ``inventory``::
 
     [servers_griffin]
-    localhost
+    your-server
 
-Example content of role playbook file ``playbook.yml``::
+Example content of role playbook file ``role_playbook.yml``::
 
     - hosts: servers_griffin
       remote_user: root
@@ -180,17 +88,78 @@ Example content of role playbook file ``playbook.yml``::
 
 Example usage::
 
-    ansible-playbook -i inventory playbook.yml
+    # Run everything:
+    ansible-playbook --ask-vault-pass --inventory inventory role_playbook.yml
+
     ansible-playbook -i inventory playbook.yml --extra-vars '{"hm_griffin__apt_force_update":"yes"}'
 
 
-License
+.. _section-role-griffin-variables:
+
+Configuration variables
 --------------------------------------------------------------------------------
 
-MIT
+
+Internal role variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. envvar:: hm_griffin__install_packages
+
+    List of packages defined separately for each linux distribution and package manager,
+    that MUST be present on target system. Any package on this list will be installed on
+    target host. This role currently recognizes only ``apt`` for ``debian``.
+
+    * *Datatype:* ``dict``
+    * *Default:* (please see YAML file ``defaults/main.yml``)
+    * *Example:*
+
+    .. code-block:: yaml
+
+        hm_griffin__install_packages:
+          debian:
+            apt:
+              - syslog-ng
+              - ...
+
+.. envvar:: hm_griffin__apt_force_update
+
+    Force APT cache update before installing any packages ('yes','no').
+
+    * *Datatype:* ``string``
+    * *Default:* ``no``
 
 
-Author Information
+Built-in Ansible variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. envvar:: ansible_lsb['codename']
+
+    Debian distribution codename is used for :ref:`template customization <section-overview-role-customize-templates>`
+    feature.
+
+
+.. _section-role-griffin-files:
+
+Managed files
 --------------------------------------------------------------------------------
 
-Jan Mach <honza.mach.ml@gmail.com>
+.. note::
+
+    This role supports the :ref:`template customization <section-overview-role-customize-templates>` feature.
+
+This role manages content of following files on target system:
+
+* ``/etc/telegraf/telegraf.conf`` *[TEMPLATE]*
+* ``/etc/grafana/grafana.ini`` *[TEMPLATE]*
+* ``/etc/grafana/provisioning/datasources/griffin.yaml`` *[TEMPLATE]*
+
+
+.. _section-role-griffin-author:
+
+Author and license
+--------------------------------------------------------------------------------
+
+| *Copyright:* (C) since 2019 Honza Mach <honza.mach.ml@gmail.com>
+| *Author:* Honza Mach <honza.mach.ml@gmail.com>
+| Use of this role is governed by the MIT license, see LICENSE file.
+|

@@ -26,14 +26,9 @@
     filename: grafana
     update_cache: yes
 
-- name: Uninstalling unnecessary packages
-  apt:
-    name: "{{ hm_griffin__uninstall_list }}"
-    state: absent
-
 - name: Installing necessary packages
   apt:
-    name: "{{ hm_griffin__install_list }}"
+    name: "{{ hm_griffin__install_packages[ansible_os_family|lower]['apt'] }}"
     state: latest
     update_cache: "{{ hm_griffin__apt_force_update }}"
 
